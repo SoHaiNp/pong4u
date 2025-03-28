@@ -24,23 +24,53 @@ public class Paddle {
         bounds = new Rectangle(x, y, width, height);
     }
 
+    // Método de atualização para o jogador (controle via teclado)
     public void update(float delta, float velocity, float screenHeight) {
         if (isPlayer) {
             if (Gdx.input.isKeyPressed(Input.Keys.UP)) {
                 y += velocity * delta;
             }
-
             if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) {
                 y -= velocity * delta;
             }
         }
-        // Garante que a raquete não saia dos limites verticais da tela
+        // Garante que a raquete não saia dos limites da tela
         if (y < 0) {
             y = 0;
         } else if (y > screenHeight - height) {
             y = screenHeight - height;
         }
-        // Atualiza os limites do retângulo
+        bounds.setPosition(x, y);
+    }
+
+    // Novo método para controlar a raquete via IA
+    public void updateAI(float delta, Ball ball, float screenHeight) {
+        // Calcula o centro da raquete e da bola
+        float paddleCenter = y + height / 2;
+        float ballCenter = ball.getY() + ball.getHeight() / 2;
+        float diff = ballCenter - paddleCenter;
+
+        // Define uma zona morta para evitar microajustes
+        float threshold = 10; // Se a diferença for menor que 10 pixels, a raquete não se move
+
+        // Velocidade máxima da raquete controlada pela IA (valor ajustável conforme a dificuldade)
+        float aiSpeed = 300;
+
+        if (Math.abs(diff) > threshold) {
+            if (diff > 0) {
+                // Se a bola está abaixo, move a raquete para baixo
+                y += aiSpeed * delta;
+                if (y + height > screenHeight) {
+                    y = screenHeight - height;
+                }
+            } else {
+                // Se a bola está acima, move a raquete para cima
+                y -= aiSpeed * delta;
+                if (y < 0) {
+                    y = 0;
+                }
+            }
+        }
         bounds.setPosition(x, y);
     }
 

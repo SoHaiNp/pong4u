@@ -1,6 +1,5 @@
 package com.retronimia.pong4u;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
@@ -11,7 +10,10 @@ public class Ball {
     private Texture texture;
     private float velocityX, velocityY;
     private float initialSpeed;
+    private float currentSpeed;
     private Rectangle bounds;
+    private int hitCount = 0;
+    private final float maxVerticalSpeed = 350;
 
     public Ball(float x, float y, float width, float height, Texture texture, float initialSpeed) {
         this.x = x;
@@ -20,19 +22,17 @@ public class Ball {
         this.height = height;
         this.texture = texture;
         this.initialSpeed = initialSpeed;
-        // Inicia a bola com uma direção aleatória
-        velocityX = initialSpeed * (Math.random() < 0.5 ? -1 : 1);
-        velocityY = initialSpeed * (Math.random() < 0.5 ? -1 : 1);
+        this.currentSpeed = initialSpeed;
+        this.velocityX = currentSpeed * (Math.random() < 0.5 ? -1 : 1);
+        this.velocityY = currentSpeed * (Math.random() < 0.5 ? -1 : 1);
         bounds = new Rectangle(x, y, width, height);
     }
 
     public void update(float delta, Paddle paddlePlayer, Paddle paddleComputer, float screenWidth, float screenHeight) {
-        // Atualiza a posição da bola
         x += velocityX * delta;
         y += velocityY * delta;
         bounds.setPosition(x, y);
 
-        // Verifica colisão com os limites superior e inferior
         if (y < 0) {
             y = 0;
             velocityY = -velocityY;
@@ -43,69 +43,68 @@ public class Ball {
             bounds.setY(y);
         }
 
-        // Verifica colisão com a raquete do jogador (lado direito)
         if (bounds.overlaps(paddlePlayer.getBounds())) {
-            resolvePaddleCollision(paddlePlayer);
+            handlePaddleCollision(paddlePlayer);
         }
-
-        // Verifica colisão com a raquete do computador (lado esquerdo)
         if (bounds.overlaps(paddleComputer.getBounds())) {
-            resolvePaddleCollision(paddleComputer);
+            handlePaddleCollision(paddleComputer);
         }
 
-        // Se a bola sair dos limites laterais, reinicia sua posição
         if (x < 0 || x > screenWidth) {
             reset(screenWidth, screenHeight);
         }
     }
 
-    private void resolvePaddleCollision(Paddle paddle) {
-        // Obtemos os bounds da raquete
-        Rectangle paddleBounds = paddle.getBounds();
+    private void handlePaddleCollision(Paddle paddle) {
+        float paddleCenterY = paddle.getBounds().y + paddle.getBounds().height / 2;
+        float ballCenterY = this.y + this.height / 2;
+        float offset = ballCenterY - paddleCenterY;
+        float normalizedOffset = offset / (paddle.getBounds().height / 2);
+        if (normalizedOffset < -1) normalizedOffset = -1;
+        if (normalizedOffset > 1) normalizedOffset = 1;
 
-        // Calcula os overlaps em X e Y
-        float overlapLeft = (x + width) - paddleBounds.x; // Quando a bola colide do lado esquerdo da raquete
-        float overlapRight = (paddleBounds.x + paddleBounds.width) - x; // Colisão pelo lado direito
-        // Para o eixo vertical, calculamos os overlaps de cima e de baixo
-        float overlapBottom = (y + height) - paddleBounds.y;
-        float overlapTop = (paddleBounds.y + paddleBounds.height) - y;
+        float ballCenterX = this.x + this.width / 2;
+        float paddleCenterX = paddle.getBounds().x + paddle.getBounds().width / 2;
 
-        // Escolhemos os menores overlaps em cada direção
-        float minOverlapX = Math.min(overlapLeft, overlapRight);
-        float minOverlapY = Math.min(overlapTop, overlapBottom);
-
-        // Se a colisão for predominantemente horizontal, invertemos velocityX e reposicionamos horizontalmente
-        if (minOverlapX < minOverlapY) {
-            velocityX = -velocityX;
-            // Se for a raquete do jogador (lado direito), reposiciona a bola à esquerda da raquete;
-            // Se for a raquete do computador (lado esquerdo), reposiciona a bola à direita da raquete.
-            if (paddle.isPlayer()) {
-                x = paddleBounds.x - width;
-            } else {
-                x = paddleBounds.x + paddleBounds.width;
-            }
-            bounds.setX(x);
+        boolean validHit;
+        if (paddle.isPlayer()) {
+            validHit = (ballCenterX < paddleCenterX);
         } else {
-            // Caso contrário, é uma colisão vertical – invertemos velocityY e reposicionamos verticalmente
-            velocityY = -velocityY;
-            // Se a bola estiver acima do centro da raquete, reposiciona-a para cima; caso contrário, para baixo.
-            float paddleCenterY = paddleBounds.y + paddleBounds.height / 2;
-            float ballCenterY = y + height / 2;
-            if (ballCenterY > paddleCenterY) {
-                y = paddleBounds.y + paddleBounds.height;
-            } else {
-                y = paddleBounds.y - height;
-            }
-            bounds.setY(y);
+            validHit = (ballCenterX > paddleCenterX);
         }
+
+        if (validHit) {
+            if (paddle.isPlayer()) {
+                x = paddle.getBounds().x - width;
+            } else {
+                x = paddle.getBounds().x + paddle.getBounds().width;
+            }
+            velocityX = -velocityX;
+            velocityY = normalizedOffset * maxVerticalSpeed;
+            hitCount++;
+            if (hitCount % 5 == 0) {
+                currentSpeed += 20;
+                velocityX = (velocityX < 0 ? -1 : 1) * currentSpeed;
+            }
+        } else {
+            // Para toque inválido, inverte a velocidade vertical e reposiciona a bola para fora do campo.
+            velocityY = -velocityY;
+            if (paddle.isPlayer()) {
+                x = paddle.getBounds().x + paddle.getBounds().width;
+            } else {
+                x = paddle.getBounds().x - width;
+            }
+        }
+        bounds.setPosition(x, y);
     }
 
     public void reset(float screenWidth, float screenHeight) {
-        // Posiciona a bola no centro da tela
         x = screenWidth / 2 - width / 2;
         y = screenHeight / 2 - height / 2;
-        velocityX = initialSpeed * (Math.random() < 0.5 ? -1 : 1);
-        velocityY = initialSpeed * (Math.random() < 0.5 ? -1 : 1);
+        currentSpeed = initialSpeed;
+        hitCount = 0;
+        velocityX = currentSpeed * (Math.random() < 0.5 ? -1 : 1);
+        velocityY = currentSpeed * (Math.random() < 0.5 ? -1 : 1);
         bounds.setPosition(x, y);
     }
 
@@ -115,5 +114,14 @@ public class Ball {
 
     public Rectangle getBounds() {
         return bounds;
+    }
+
+    // Novos getters para a posição vertical e altura da bola (usados pela IA)
+    public float getY() {
+        return y;
+    }
+
+    public float getHeight() {
+        return height;
     }
 }
